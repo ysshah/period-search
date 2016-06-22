@@ -6,7 +6,7 @@ from methods import findPeaks, createCustomMatrix
 import itertools, sys, pickle, datetime, os, warnings, ipdb
 
 
-DIRNAME = 'out2'
+DIRNAME = 'out_lasso_path'
 
 
 def init():
@@ -75,12 +75,16 @@ def LassoDiff(clf, A, time, p, delta_p, SNR, i=None):
 
     convWarning = False
     with warnings.catch_warnings(record=True) as w:
-        clf.fit(A, flux)
-        # ipdb.set_trace()
+        # clf.fit(A, flux)
+        clf = linear_model.lasso_path(A, flux)
+
         if len(w) == 1 and type(w[0].message) is ConvergenceWarning:
             convWarning = True
 
-    power = clf.coef_[:A.shape[1]//2]**2 + clf.coef_[A.shape[1]//2:A.shape[1]//2 * 2]**2
+    # ipdb.set_trace()
+    coeffs = clf[1][:,99]
+
+    power = coeffs[:A.shape[1]//2]**2 + coeffs[A.shape[1]//2:A.shape[1]//2 * 2]**2
 
     peaks = findPeaks(power)
     if peaks.size > 1:
@@ -167,22 +171,25 @@ if __name__ == '__main__':
     N_pix = delta_p_range.size * SNR_range.size
 
     a0 = 0.00001
-    alpha_vars = (a0*2, a0/4, a0/2, a0, a0*4)
-    for alpha in alpha_vars:
-        alphadir, plotdir, rfile, figfile = createAlphaDirs(alpha)
-        diffs, powers = createArrays(delta_p_range.size, SNR_range.size, search_periods.size)
-        fig, img = plotImage(diffs, delta_p_range, SNR_range, alpha)
-        clf = linear_model.Lasso(alpha=alpha, fit_intercept=False)
-        args = [(clf, A, time, p,) + a for a in variables]
-        start = datetime.datetime.now()
+    # alpha_vars = (a0*2, a0/4, a0/2, a0, a0*4)
+    # for alpha in alpha_vars:
 
-        for n, (i, power, p1_i, p2_i, convWarning) in enumerate(map(LassoDiffWrapper, args), 1):
-            recordProgress(start, n, N_pix, rfile)
-            p1, p2 = search_periods[[p1_i, p2_i]]
-            diff = abs(abs(p1 - p2) - abs(variables[i][0]))
-            update(i, diffs, diff, powers, power, fig, img)
-            plotCoefficients(variables, i, search_periods, p1_i, p2_i, diff, power, alpha, plotdir, convWarning)
+    alpha = 0.00001
 
-        close(fig)
+    alphadir, plotdir, rfile, figfile = createAlphaDirs(alpha)
+    diffs, powers = createArrays(delta_p_range.size, SNR_range.size, search_periods.size)
+    fig, img = plotImage(diffs, delta_p_range, SNR_range, alpha)
+    clf = linear_model.Lasso(alpha=alpha, fit_intercept=False)
+    args = [(clf, A, time, p,) + a for a in variables]
+    start = datetime.datetime.now()
 
-        alphaFinal(diffs, powers, grid, alphadir, rfile, start)
+    for n, (i, power, p1_i, p2_i, convWarning) in enumerate(map(LassoDiffWrapper, args), 1):
+        recordProgress(start, n, N_pix, rfile)
+        p1, p2 = search_periods[[p1_i, p2_i]]
+        diff = abs(abs(p1 - p2) - abs(variables[i][0]))
+        update(i, diffs, diff, powers, power, fig, img)
+        plotCoefficients(variables, i, search_periods, p1_i, p2_i, diff, power, alpha, plotdir, convWarning)
+
+    close(fig)
+
+    alphaFinal(diffs, powers, grid, alphadir, rfile, start)
