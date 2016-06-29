@@ -9,7 +9,7 @@ import itertools, sys, pickle, datetime, os, warnings, ipdb, bisect
 
 
 ################### INPUT VARIABLES ###################
-DIRNAME = 'out_lasso_path2'
+DIRNAME = 'out_lasso_path3'
 time_i, time_f, dt = 0.0, 100.0, 0.02043359821692
 search_low, search_high, search_num = 10.0, 30.0, 1000
 delta_p_range = np.linspace(-9, 9, 40)
@@ -49,8 +49,21 @@ def lassoPath(delta_p, SNR, a1, a2):
     power = np.sqrt(coeffs[:A.shape[1]//2]**2 + coeffs[A.shape[1]//2:A.shape[1]//2 * 2]**2)
 
     peaks = findPeaks(power)
-    if peaks.size > 1:
-        p1_i, p2_i = np.sort(peaks[-2:])[::int(np.sign(delta_p))]
+    if peaks.size:
+        delta = 0.1
+        ia = peaks[-1]
+        pa = search_periods[ia]
+        if peaks.size > 1:
+            ixi = np.argmin(np.abs(search_periods - (pa-delta)))
+            ixf = np.argmin(np.abs(search_periods - (pa+delta)))
+            ib = peaks[np.logical_or(peaks < ixi, ixf < peaks)][-1]
+        else:
+            ib = power[rest].argsort()[-1]
+
+        # d2P_dp2 = np.gradient(np.gradient(power))
+        # ia, ib = peaks[-3:][d2P_dp2[peaks[-3:]].argsort()][:2]
+        p1_i, p2_i = np.sort([ia, ib])[::int(np.sign(delta_p))]
+        # p1_i, p2_i = np.sort(peaks[-2:])[::int(np.sign(delta_p))]
     else:
         p1_i, p2_i = np.sort(power.argsort()[-2:])[::int(np.sign(delta_p))]
 
@@ -202,9 +215,11 @@ def subFinal(diff_arrays, powers, ampdir, rfile, start):
 if __name__ == '__main__':
 
     a1 = 1.00
-    amp_vars = (0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 1.00)
+    # amp_vars = (0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 1.00)
+    amp_vars = (0.01, 0.02, 0.05, 0.10, 0.50, 0.20, 1.00)
     # amp_vars = [1.00]
     for a2 in amp_vars[::-1]:
+        print('\nAmp {}:'.format(a2))
         ampdir, plotdir, rfile, figfiles = createDirs(a2)
         diff_arrays, powers = createArrays()
         figs, imgs = createImages(diff_arrays, a1, a2)
