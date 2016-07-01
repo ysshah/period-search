@@ -5,11 +5,11 @@ from sklearn import linear_model
 from scipy.signal import lombscargle
 from sklearn.utils import ConvergenceWarning
 from methods import findPeaks, createCustomMatrix
-import itertools, sys, pickle, datetime, os, warnings, ipdb, bisect
+import itertools, sys, pickle, datetime, os, warnings, ipdb, bisect, matplotlib
 
 
 ################### INPUT VARIABLES ###################
-DIRNAME = 'out_lasso_path3'
+DIRNAME = 'data/out_lasso_path4'
 time_i, time_f, dt = 0.0, 100.0, 0.02043359821692
 search_low, search_high, search_num = 10.0, 30.0, 1000
 delta_p_range = np.linspace(-9, 9, 40)
@@ -59,13 +59,14 @@ def lassoPath(delta_p, SNR, a1, a2):
             ib = peaks[np.logical_or(peaks < ixi, ixf < peaks)][-1]
         else:
             ib = power[rest].argsort()[-1]
-
         # d2P_dp2 = np.gradient(np.gradient(power))
         # ia, ib = peaks[-3:][d2P_dp2[peaks[-3:]].argsort()][:2]
-        p1_i, p2_i = np.sort([ia, ib])[::int(np.sign(delta_p))]
         # p1_i, p2_i = np.sort(peaks[-2:])[::int(np.sign(delta_p))]
     else:
-        p1_i, p2_i = np.sort(power.argsort()[-2:])[::int(np.sign(delta_p))]
+        ia, ib = power.argsort()[-2:]
+
+    i_cp = np.abs(search_periods[[ia,ib]] - center_period).argmin()
+    p1_i, p2_i = (ib, ia) if i_cp else (ia, ib)
 
     f, ax1 = subplots()
     ax1.set_title('$P_1$ = {:.2f}, $A_1$ = {:.2f}, $P_2$ = {:.2f}, $A_2$ = {:.2f}, SNR = {:.2f}'.format(
@@ -119,8 +120,8 @@ def createDirs(amplitude):
     """Create necessary directories and filenames."""
     ampdir = os.path.join(DIRNAME, 'amp{:.2f}'.format(amplitude))
     plotdir = os.path.join(ampdir, 'plots')
-    rfile = os.path.join(ampdir, 'results.txt')
-    figfiles = [os.path.join(ampdir, f) for f in [
+    rfile = 'results.txt'
+    figfiles = [os.path.join(ampdir, f+'.pdf') for f in [
         'deltadeltaP',
         'deltaP1',
         'deltaP2',
@@ -161,6 +162,7 @@ def createImages(diff_arrays, a1, a2):
         title(titles[i]+'; $A_1$ = {:.2f}, $A_2$ = {:.2f}'.format(a1, a2))
         xlabel('SNR ($1/\\sigma_\\mathrm{{noise}}^2$)')
         ylabel('Input $\\Delta$ period')
+        yticks(range(-9, 10, 3))
     return figs, imgs   
 
 
@@ -177,7 +179,7 @@ def updateImages(diff_arrays, figs, imgs, figfiles):
         imgs[i].set_data(diff_arrays[i])
         imgs[i].set_clim(np.nanmin(diff_arrays[i]), np.nanmax(diff_arrays[i]))
         figs[i].canvas.draw()
-        figs[i].savefig(figfiles[i], dpi=200)
+        figs[i].savefig(figfiles[i], bbox_inches='tight')
 
 
 def recordProgress(start, n, rfile):
@@ -214,9 +216,11 @@ def subFinal(diff_arrays, powers, ampdir, rfile, start):
 
 if __name__ == '__main__':
 
+    matplotlib.rcParams['font.sans-serif'] = ['Arial']
+
     a1 = 1.00
     # amp_vars = (0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 1.00)
-    amp_vars = (0.01, 0.02, 0.05, 0.10, 0.50, 0.20, 1.00)
+    amp_vars = (0.01, 0.02, 0.05, 1.00, 0.50, 0.20, 0.10)
     # amp_vars = [1.00]
     for a2 in amp_vars[::-1]:
         print('\nAmp {}:'.format(a2))
@@ -227,7 +231,7 @@ if __name__ == '__main__':
         start = datetime.datetime.now()
 
         for i, (f, ddp, dp1, dp2, da1, da2, power) in enumerate(map(lassoPathWrapper, args)):
-            f.savefig(os.path.join(plotdir, '{:d}.png'.format(i)), dpi=200)
+            f.savefig(os.path.join(plotdir, '{:d}.pdf'.format(i)), bbox_inches='tight')
             close(f)
             updateArrays(i, diff_arrays, ddp, dp1, dp2, da1, da2, power)
             updateImages(diff_arrays, figs, imgs, figfiles)
